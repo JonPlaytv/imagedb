@@ -27,13 +27,10 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
 processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base", use_fast=True)
 caption_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
-
 nlp = spacy.load("en_core_web_sm")
 
-# Regex für Bild-Endungen vor evtl. Query-Parametern (z.B. ?v=12345)
 image_ext_pattern = re.compile(r"\.(jpg|jpeg|png|webp|bmp|gif)(?:\?.*)?$", re.IGNORECASE)
 
-# Lade bestehende Embeddings und Metadaten, falls vorhanden
 if os.path.exists(EMBEDDINGS_FILE) and os.path.exists(METADATA_FILE):
     clip_vectors = np.load(EMBEDDINGS_FILE)
     with open(METADATA_FILE) as f:
@@ -41,6 +38,8 @@ if os.path.exists(EMBEDDINGS_FILE) and os.path.exists(METADATA_FILE):
 else:
     clip_vectors = np.zeros((0, 512), dtype=np.float32)
     metadata = []
+
+print(f"[INIT] Loaded {len(metadata)} metadata items with {clip_vectors.shape[0]} vectors.")
 
 def generate_caption(image: Image.Image) -> str:
     inputs = processor(image, return_tensors="pt").to(device)
@@ -67,7 +66,7 @@ def process_query_text(text):
 def get_images_from_website(base_url):
     print(f"[INFO] Scraping URL: {base_url}")
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0"
     }
     try:
         resp = requests.get(base_url, headers=headers, timeout=10)
@@ -90,8 +89,7 @@ def download_and_embed(url):
     try:
         r = requests.get(url, timeout=10)
         r.raise_for_status()
-        img = Image.open(BytesIO(r.content)).convert("RGB")
-        img = img.resize((512, 512))
+        img = Image.open(BytesIO(r.content)).convert("RGB").resize((512, 512))
         filename = f"web_{len(metadata)}.webp"
         path = os.path.join(IMAGE_FOLDER, filename)
         img.save(path, "WEBP", quality=85)
@@ -113,11 +111,10 @@ def download_and_embed(url):
         }
 
         metadata.append(meta)
-
         global clip_vectors
         clip_vectors = np.vstack([clip_vectors, embedding[None]])
-
         return meta, embedding
+
     except Exception as e:
         print(f"[SKIP] {url}: {e}")
         return None, None
@@ -147,46 +144,55 @@ def index():
                 generated_tags = extract_keywords(generated_caption)
                 query_hash, query_embed = process_query_image(query_img)
 
-                # Filter metadata by perceptual hash distance
                 filtered_indices = [
                     i for i, meta in enumerate(metadata)
-                    if (query_hash - imagehash.hex_to_hash(meta["hash"])) < 16
+                    if "hash" in meta and (query_hash - imagehash.hex_to_hash(meta["hash"])) < 16
                 ]
+
                 if not filtered_indices:
                     filtered_indices = list(range(len(metadata)))
 
-                search_vectors = clip_vectors[filtered_indices]
-                sims = cosine_similarity(query_embed, search_vectors)[0]
-                top_indices = np.argsort(sims)[-25:][::-1]
+                if filtered_indices:
+                    search_vectors = clip_vectors[filtered_indices]
+                    if search_vectors.size > 0:
+                        sims = cosine_similarity(query_embed, search_vectors)[0]
+                        top_indices = np.argsort(sims)[-25:][::-1]
 
-                for idx in top_indices:
-                    real_idx = filtered_indices[idx]
-                    meta = metadata[real_idx]
-                    matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", [])))
+                        for idx in top_indices:
+                            real_idx = filtered_indices[idx]
+                            meta = metadata[real_idx]
+                            matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", [])))
+                    else:
+                        print("[WARN] Empty search vector array.")
+                else:
+                    print("[WARN] No valid indices for search.")
 
         elif text:
             query_type = "text"
-            query_embed = process_query_text(text)
-            sims = cosine_similarity(query_embed, clip_vectors)[0]
-            top_indices = np.argsort(sims)[-100:][::-1]
+            if clip_vectors.shape[0] == 0:
+                print("[WARN] clip_vectors empty, skipping text search.")
+            else:
+                query_embed = process_query_text(text)
+                sims = cosine_similarity(query_embed, clip_vectors)[0]
+                top_indices = np.argsort(sims)[-100:][::-1]
 
-            text_lower = text.lower()
-            for idx in top_indices:
-                meta = metadata[idx]
-                if (text_lower in meta.get("caption", "").lower()) or any(text_lower in t for t in meta.get("tags", [])):
-                    matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", [])))
-                    if len(matches) >= 25:
-                        break
+                text_lower = text.lower()
+                for idx in top_indices:
+                    meta = metadata[idx]
+                    if (text_lower in meta.get("caption", "").lower()) or any(text_lower in t for t in meta.get("tags", [])):
+                        matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", [])))
+                        if len(matches) >= 25:
+                            break
 
         elif site_url:
             query_type = "url"
             try:
                 img_urls = get_images_from_website(site_url)
-                for url in img_urls[:15]:  # limit for speed
+                for url in img_urls[:15]:  # Limit for performance
                     meta, _ = download_and_embed(url)
                     if meta:
                         matches.append((meta["path"], 0, 1.0, meta["caption"], meta["tags"]))
-                # Speichere Datenbank nach neuem Download
+                # Save updated DB
                 np.save(EMBEDDINGS_FILE, clip_vectors)
                 with open(METADATA_FILE, "w") as f:
                     json.dump(metadata, f, indent=2)

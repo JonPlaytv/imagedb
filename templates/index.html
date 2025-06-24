@@ -399,7 +399,7 @@
       style="display:none" 
     />
   </form>
-
+  
   <label id="drop-area" for="fileElem" tabindex="0" role="button" aria-label="Drag and drop image or click to browse">
     <p>Drag & Drop an image here or click to browse</p>
     <img id="preview-thumb" alt="Preview Thumbnail" />
@@ -413,7 +413,15 @@
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
     </svg>
   </button>
+  <button id="upload-btn" aria-label="Upload files" title="Upload files" type="button" style="position: fixed; top: 20px; right: 70px; width: 36px; height: 36px; background: rgba(255 255 255 / 0.15); border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(255 255 255 / 0.1); color: #ddd; transition: background-color 0.3s ease; z-index: 10000;">
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
+    viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+    <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17h16" />
+  </svg>
+</button>
 
+<input type="file" id="upload-input" multiple style="display: none;" />
+  
   <!-- Settings panel -->
   <div id="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1">
     <h2 id="settings-title" style="margin-bottom:1rem; font-weight:600; font-size:1.25rem; color:#667eea;">Settings</h2>
@@ -471,6 +479,8 @@
   const settingsPanel = document.getElementById('settings-panel');
   const darkmodeToggle = document.getElementById('darkmode-toggle');
   const siteInputSettings = document.getElementById('site-input-settings');
+  const uploadBtn = document.getElementById('upload-btn');
+  const uploadInput = document.getElementById('upload-input');
 
   // Show preview thumbnail when image selected
   function showPreview(file) {
@@ -497,6 +507,55 @@
       submitForm();
     }
   });
+
+
+uploadBtn.addEventListener('click', () => {
+  uploadInput.click();
+});
+
+uploadInput.addEventListener('change', () => {
+  if (uploadInput.files.length) {
+    // You now have the selected files here:
+    const files = uploadInput.files;
+
+    // Create FormData to send files to your server
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+      formData.append('files[]', files[i]);
+    }
+
+    // Send files to your server via fetch
+    fetch('/upload', {  // Make sure your backend has an '/upload' POST endpoint
+      method: 'POST',
+      body: formData,
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('Upload failed');
+      return res.json();
+    })
+    .then(data => {
+      alert('Files uploaded successfully!');
+      // You can refresh your DB view or results here if needed
+    })
+    .catch(err => {
+      alert('Error uploading files.');
+      console.error(err);
+    });
+
+    // Reset input so same file can be re-uploaded if needed
+    uploadInput.value = '';
+  }
+});
+
+
+
+
+
+
+
+
+
+
 
   // Drag & Drop styles
   dropArea.addEventListener('dragenter', e => {
@@ -689,23 +748,57 @@
     }
   });
 
-  // Dark mode toggle
   darkmodeToggle.addEventListener('change', () => {
-    if(darkmodeToggle.checked){
-      document.body.classList.add('dark-mode');
-    } else {
-      document.body.classList.remove('dark-mode');
-    }
-  });
+  if (darkmodeToggle.checked) {
+    document.body.classList.add('dark-mode');
+    localStorage.setItem('darkmode', 'true');
+  } else {
+    document.body.classList.remove('dark-mode');
+    localStorage.setItem('darkmode', 'false');
+  }
+});
 
-  // Initialize darkmode toggle state from body class
-  window.addEventListener('DOMContentLoaded', () => {
-    darkmodeToggle.checked = document.body.classList.contains('dark-mode');
-  });
+window.addEventListener('DOMContentLoaded', () => {
+  const dm = localStorage.getItem('darkmode');
+  if (dm === 'true') {
+    document.body.classList.add('dark-mode');
+    darkmodeToggle.checked = true;
+  } else {
+    darkmodeToggle.checked = false;
+  }
+});
+
 
   // Initial attach
   attachCardClickEvents();
   attachTagClickEvents();
+  // Clipboard paste support for images
+window.addEventListener('paste', (event) => {
+  const items = event.clipboardData?.items;
+  if (!items) return;
+
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) {
+        // Set file to file input to reuse existing flow
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+
+        showPreview(file);
+
+        // Clear other inputs
+        searchInput.value = '';
+        siteInputSettings.value = '';
+
+        submitForm();
+        break;
+      }
+    }
+  }
+});
+
 
 </script>
 

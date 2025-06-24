@@ -198,7 +198,6 @@ def index():
                         scored_results.sort(key=lambda x: x[0], reverse=True)
 
                         for score, meta, clip_score, tag_score in scored_results[:25]:
-                            # HIER die Quelle als 6. Parameter anhängen
                             matches.append((meta["path"], 0, score, meta.get("caption", ""), meta.get("tags", []), meta.get("source", "")))
                     else:
                         print("[WARN] Empty search vector array.")

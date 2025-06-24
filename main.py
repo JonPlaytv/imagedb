@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import numpy as np
 import clip
@@ -28,6 +29,9 @@ processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base
 caption_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
 
 nlp = spacy.load("en_core_web_sm")
+
+# Regex für Bild-Endungen vor evtl. Query-Parametern (z.B. ?v=12345)
+image_ext_pattern = re.compile(r"\.(jpg|jpeg|png|webp|bmp|gif)(?:\?.*)?$", re.IGNORECASE)
 
 # Lade bestehende Embeddings und Metadaten, falls vorhanden
 if os.path.exists(EMBEDDINGS_FILE) and os.path.exists(METADATA_FILE):
@@ -62,17 +66,20 @@ def process_query_text(text):
 
 def get_images_from_website(base_url):
     print(f"[INFO] Scraping URL: {base_url}")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
+    }
     try:
-        resp = requests.get(base_url, timeout=10)
+        resp = requests.get(base_url, headers=headers, timeout=10)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         img_urls = set()
         for img in soup.find_all("img"):
             src = img.get("src")
             if src:
-                full = urljoin(base_url, src)
-                if full.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif")):
-                    img_urls.add(full)
+                full_url = urljoin(base_url, src)
+                if image_ext_pattern.search(full_url):
+                    img_urls.add(full_url)
         print(f"[INFO] Found {len(img_urls)} images")
         return list(img_urls)
     except Exception as e:
@@ -175,11 +182,11 @@ def index():
             query_type = "url"
             try:
                 img_urls = get_images_from_website(site_url)
-                for url in img_urls[:15]:
+                for url in img_urls[:15]:  # limit for speed
                     meta, _ = download_and_embed(url)
                     if meta:
                         matches.append((meta["path"], 0, 1.0, meta["caption"], meta["tags"]))
-                # Save DB after new downloads
+                # Speichere Datenbank nach neuem Download
                 np.save(EMBEDDINGS_FILE, clip_vectors)
                 with open(METADATA_FILE, "w") as f:
                     json.dump(metadata, f, indent=2)

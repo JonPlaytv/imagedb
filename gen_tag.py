@@ -8,6 +8,7 @@ import torch
 import spacy
 from transformers import BlipProcessor, BlipForConditionalGeneration
 from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm  # <--- neu
 
 IMAGE_FOLDER = r"E:\imagedb\static\images"
 EMBEDDINGS_FILE = "clip_embeddings.npy"
@@ -66,7 +67,7 @@ def main():
 
     # Load images + compute hashes concurrently (IO bound)
     with ThreadPoolExecutor(max_workers=8) as executor:
-        loaded = list(executor.map(load_and_prepare_image, to_process))
+        loaded = list(tqdm(executor.map(load_and_prepare_image, to_process), total=len(to_process), desc="Loading images"))
 
     # Filter out errors and existing hashes
     filtered = [(fname, img, phash) for fname, img, phash in loaded if img is not None and phash not in existing_hashes]
@@ -85,7 +86,8 @@ def main():
     new_metadata = []
     new_embeddings = []
 
-    for i, (fname, img, phash) in enumerate(filtered):
+    # Caption generation and metadata building with progress bar
+    for i, (fname, img, phash) in enumerate(tqdm(filtered, desc="Processing images")):
         save_image(img, fname)  # overwrite with webp version if desired
 
         caption = generate_caption(img)
@@ -114,4 +116,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

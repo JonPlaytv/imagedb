@@ -21,10 +21,11 @@ processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base
 caption_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
 nlp = spacy.load("en_core_web_sm")
 
-def generate_caption(image: Image.Image) -> str:
-    inputs = processor(image, return_tensors="pt").to(device)
+def generate_captions_batch(images):
+    inputs = processor(images=images, return_tensors="pt").to(device)
     outputs = caption_model.generate(**inputs)
-    return processor.decode(outputs[0], skip_special_tokens=True)
+    captions = [processor.decode(output, skip_special_tokens=True) for output in outputs]
+    return captions
 
 def extract_keywords(caption: str):
     doc = nlp(caption.lower())

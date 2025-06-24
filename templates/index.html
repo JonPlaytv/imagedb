@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Image Search - Drag & Drop & Tag Search & Text Search</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&display=swap');
+
+    * {
+      box-sizing: border-box;
+      margin: 0; padding: 0;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+      color: #f0f0f0;
+    }
+
+    h1 {
+      margin-bottom: 1rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(255 255 255 / 0.3);
+    }
+
+    /* Search form */
+    #search-form {
+      position: relative;
+      margin-bottom: 1.5rem;
+      width: 200px;
+      transition: width 0.4s ease;
+      cursor: pointer;
+    }
+    #search-form:hover,
+    #search-form:focus-within {
+      width: 350px;
+      cursor: auto;
+    }
+
+    #search-input {
+      width: 100%;
+      padding: 0.5rem 2.5rem 0.5rem 1rem;
+      border-radius: 30px;
+      border: none;
+      outline: none;
+      font-size: 1rem;
+      transition: background-color 0.3s ease;
+      background: rgba(255 255 255 / 0.15);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(255 255 255 / 0.1);
+    }
+    #search-input::placeholder {
+      color: #ddd;
+    }
+    #search-input:hover {
+      background: rgba(255 255 255 / 0.3);
+    }
+
+    /* Search icon inside input */
+    #search-icon {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+      fill: #ddd;
+      transition: fill 0.3s ease;
+    }
+    #search-form:hover #search-icon,
+    #search-form:focus-within #search-icon {
+      fill: #fff;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    /* Drop area */
+    #drop-area {
+      position: relative;
+      width: 100%;
+      max-width: 600px;
+      border: 3px dashed rgba(255 255 255 / 0.6);
+      border-radius: 15px;
+      padding: 2rem;
+      text-align: center;
+      color: #ddd;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      background: rgba(255 255 255 / 0.1);
+      transition: background-color 0.3s ease, border-color 0.3s ease;
+      user-select: none;
+      margin-bottom: 2rem;
+      overflow: hidden;
+    }
+
+    #drop-area.hover {
+      background-color: rgba(255 255 255 / 0.3);
+      border-color: #fff;
+      color: #333;
+    }
+
+    #drop-area input[type="file"] {
+      display: none;
+    }
+
+    /* Preview thumbnail top-right in drop area */
+    #preview-thumb {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 80px;
+      height: 80px;
+      border-radius: 12px;
+      box-shadow: 0 0 12px rgba(102, 126, 234, 0.8);
+      object-fit: cover;
+      border: 2px solid #667eea;
+      display: none;
+      user-select: none;
+      pointer-events: none;
+      background: #222;
+    }
+
+    /* Results grid */
+    #results {
+      display: grid;
+      grid-template-columns: repeat(auto-fill,minmax(200px,1fr));
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    .card {
+      background: rgba(255 255 255 / 0.1);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      backdrop-filter: blur(8px);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 15px 25px rgba(102, 126, 234, 0.7);
+    }
+
+    .card img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+      transition: transform 0.5s ease;
+      border-bottom: 2px solid #764ba2;
+    }
+
+    .card:hover img {
+      transform: scale(1.1);
+    }
+
+    .caption {
+      padding: 0.75rem 1rem;
+      font-weight: 600;
+      color: #eee;
+      font-size: 1rem;
+      min-height: 3em;
+    }
+
+    .tags {
+      padding: 0 1rem 1rem 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .tag-btn {
+      background: rgba(102, 126, 234, 0.6);
+      border: none;
+      border-radius: 12px;
+      padding: 0.3rem 0.7rem;
+      color: white;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background-color 0.25s ease;
+      user-select: none;
+    }
+    .tag-btn:hover {
+      background: rgba(102, 126, 234, 0.9);
+    }
+
+    /* Lightbox */
+    #lightbox {
+      position: fixed;
+      top: 0; left: 0; right:0; bottom:0;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      backdrop-filter: blur(8px);
+      cursor: zoom-out;
+      padding: 1rem;
+    }
+
+    #lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      border-radius: 15px;
+      box-shadow: 0 0 30px #667eea;
+      animation: fadeIn 0.3s ease;
+      /* Make sure image fits and is big enough */
+      width: auto;
+      height: auto;
+    }
+
+    @keyframes fadeIn {
+      from {opacity: 0; transform: scale(0.95);}
+      to {opacity: 1; transform: scale(1);}
+    }
+
+    @media (max-width: 600px) {
+      #drop-area {
+        padding: 1.5rem;
+      }
+      .card img {
+        height: 120px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Drag & Drop Image Search</h1>
+
+  <form id="search-form" action="/" method="POST" enctype="multipart/form-data" novalidate>
+    <input
+      type="text"
+      id="search-input"
+      name="text_query"
+      placeholder="Search by text or drag & drop image"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <svg id="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M21 21l-6-6m2-5a7 7 0 1 0-14 0 7 7 0 0 0 14 0z" stroke="#ddd" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <input type="file" id="fileElem" name="query" accept="image/*" style="display:none" />
+    
+  </form>
+
+  <label id="drop-area" for="fileElem">
+    <p>Drag & Drop an image here or click to browse</p>
+    <img id="preview-thumb" alt="Preview Thumbnail" />
+  </label>
+
+  <div id="results">
+    {% for path, hdiff, sim, caption, tags in matches %}
+    <div class="card" tabindex="0" title="Similarity: {{ '%.3f'|format(sim) }}">
+      <img src="{{ url_for('static', filename=path.split('static/')[-1]) }}" alt="Result Image" />
+      <div class="caption">{{ caption }}</div>
+      <div class="tags">
+        {% for tag in tags %}
+          <button class="tag-btn" type="button">{{ tag }}</button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div id="lightbox" tabindex="0" role="dialog" aria-modal="true" aria-label="Expanded Image View">
+    <img src="" alt="Expanded Image" />
+  </div>
+
+<script>
+  const dropArea = document.getElementById('drop-area');
+  const fileInput = document.getElementById('fileElem');
+  const resultsDiv = document.getElementById('results');
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = lightbox.querySelector('img');
+  const previewThumb = document.getElementById('preview-thumb');
+  const searchForm = document.getElementById('search-form');
+  const searchInput = document.getElementById('search-input');
+  const searchIcon = document.getElementById('search-icon');
+
+  // Show preview thumbnail when image selected
+  function showPreview(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      previewThumb.style.display = 'none';
+      previewThumb.src = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+      previewThumb.src = e.target.result;
+      previewThumb.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // When file selected (browse or drop), update preview and submit form
+  fileInput.addEventListener('change', () => {
+    if(fileInput.files.length){
+      showPreview(fileInput.files[0]);
+      submitForm();
+    }
+  });
+
+  // Drag & Drop styles
+  dropArea.addEventListener('dragenter', e => {
+    e.preventDefault();
+    dropArea.classList.add('hover');
+  });
+  dropArea.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropArea.classList.add('hover');
+  });
+  dropArea.addEventListener('dragleave', e => {
+    e.preventDefault();
+    dropArea.classList.remove('hover');
+  });
+
+  dropArea.addEventListener('drop', e => {
+    e.preventDefault();
+    dropArea.classList.remove('hover');
+    if(e.dataTransfer.files.length){
+      fileInput.files = e.dataTransfer.files;
+      showPreview(e.dataTransfer.files[0]);
+      submitForm();
+    }
+  });
+
+  function submitForm(){
+  const formData = new FormData();
+
+  if(fileInput.files.length){
+    formData.append('query', fileInput.files[0]);
+  } else if (searchInput.value.trim()) {
+    formData.append('text_query', searchInput.value.trim());
+  } else {
+    // Nothing to search
+    return;
+  }
+
+  fetch('/', {
+    method: 'POST',
+    body: formData
+  }).then(res => res.text())
+    .then(html => {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const newResults = doc.getElementById('results');
+      resultsDiv.innerHTML = newResults.innerHTML;
+      attachCardClickEvents();
+      attachTagClickEvents();
+    }).catch(err => {
+      alert('Search error');
+      console.error(err);
+    });
+}
+
+// Search on enter in text field
+searchInput.addEventListener('keydown', e => {
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    // Clear file input to prefer text search
+    fileInput.value = '';
+    previewThumb.style.display = 'none';
+    submitForm();
+  }
+});
+
+// Search icon click triggers text search
+searchIcon.addEventListener('click', () => {
+  if(searchInput.value.trim()){
+    fileInput.value = '';
+    previewThumb.style.display = 'none';
+    submitForm();
+    searchInput.focus();
+  }
+});
+
+
+  // Tag search
+  function searchByTag(tag) {
+    // Clear file input and text input
+    fileInput.value = '';
+    searchInput.value = tag;
+    previewThumb.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('text_query', tag);
+
+    fetch('/', {
+      method: 'POST',
+      body: formData
+    }).then(res => res.text())
+      .then(html => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newResults = doc.getElementById('results');
+        resultsDiv.innerHTML = newResults.innerHTML;
+        attachCardClickEvents();
+        attachTagClickEvents();
+      }).catch(err => {
+        alert('Tag search error');
+        console.error(err);
+      });
+  }
+
+  function attachTagClickEvents() {
+    document.querySelectorAll('.tag-btn').forEach(btn => {
+      btn.onclick = () => {
+        const tag = btn.textContent.trim();
+        searchByTag(tag);
+      };
+    });
+  }
+
+  // Lightbox open/close
+  function attachCardClickEvents(){
+    document.querySelectorAll('.card img').forEach(img => {
+      img.addEventListener('click', () => {
+        // Show big image in lightbox
+        lightboxImg.src = img.src;
+        lightbox.style.display = 'flex';
+        lightbox.focus();
+      });
+    });
+  }
+
+  lightbox.addEventListener('click', () => {
+    lightbox.style.display = 'none';
+    lightboxImg.src = '';
+  });
+
+  lightbox.addEventListener('keydown', e => {
+    if(e.key === "Escape"){
+      lightbox.style.display = 'none';
+      lightboxImg.src = '';
+    }
+  });
+
+  // Click search icon triggers search if input not empty
+  searchIcon.addEventListener('click', () => {
+    if(searchInput.value.trim()){
+      fileInput.value = '';
+      previewThumb.style.display = 'none';
+      submitForm();
+      searchInput.focus();
+    }
+  });
+
+  // Initial attach
+  attachCardClickEvents();
+  attachTagClickEvents();
+
+</script>
+
+</body>
+</html>

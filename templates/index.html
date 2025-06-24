@@ -312,17 +312,44 @@
       z-index: 9999;
       backdrop-filter: blur(8px);
       cursor: zoom-out;
-      padding: 1rem;
+      padding: 2rem;
+      overflow-y: auto;
     }
 
     #lightbox img {
       max-width: 90vw;
-      max-height: 90vh;
+      max-height: 85vh;
       border-radius: 15px;
       box-shadow: 0 0 30px #667eea;
       animation: fadeIn 0.3s ease;
       width: auto;
       height: auto;
+    }
+
+    .lightbox-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      cursor: default;
+    }
+
+    .lightbox-info {
+      text-align: center;
+    }
+
+    #lightbox-source {
+      color: #aab2fa;
+      text-decoration: none;
+      font-weight: 600;
+      background: rgba(255 255 255 / 0.1);
+      padding: 0.5rem 1.2rem;
+      border-radius: 20px;
+      transition: all 0.3s ease;
+    }
+    #lightbox-source:hover {
+      background: #667eea;
+      color: #fff;
     }
 
     @keyframes fadeIn {
@@ -408,8 +435,8 @@
   </div>
 
   <div id="results">
-    {% for path, hdiff, sim, caption, tags in matches %}
-    <div class="card" tabindex="0" title="Similarity: {{ '%.3f'|format(sim) }}">
+    {% for path, hdiff, sim, caption, tags, source in matches %}
+    <div class="card" tabindex="0" title="Similarity: {{ '%.3f'|format(sim) }}" data-source="{{ source or '' }}">
       <img src="{{ url_for('static', filename=path.split('static/')[-1]) }}" alt="Result Image" />
       <div class="caption">{{ caption }}</div>
       <div class="tags">
@@ -421,8 +448,13 @@
     {% endfor %}
   </div>
 
-  <div id="lightbox" tabindex="0" role="dialog" aria-modal="true" aria-label="Expanded Image View">
-    <img src="" alt="Expanded Image" />
+  <div id="lightbox" tabindex="-1" role="dialog" aria-modal="true" aria-label="Expanded Image View">
+    <div class="lightbox-content">
+      <img src="" alt="Expanded Image" />
+      <div class="lightbox-info">
+        <a id="lightbox-source" href="#" target="_blank" rel="noopener noreferrer">Source Link</a>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -600,24 +632,42 @@
   // Lightbox open/close
   function attachCardClickEvents(){
     document.querySelectorAll('.card img').forEach(img => {
-      img.addEventListener('click', () => {
+      img.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = img.closest('.card');
+        const sourceUrl = card.dataset.source;
+        const sourceLink = document.getElementById('lightbox-source');
+
         // Show big image in lightbox
         lightboxImg.src = img.src;
+
+        if (sourceUrl) {
+          sourceLink.href = sourceUrl;
+          sourceLink.style.display = 'inline-block';
+        } else {
+          sourceLink.style.display = 'none';
+        }
+
         lightbox.style.display = 'flex';
         lightbox.focus();
       });
     });
   }
 
-  lightbox.addEventListener('click', () => {
-    lightbox.style.display = 'none';
-    lightboxImg.src = '';
+  lightbox.addEventListener('click', (e) => {
+    // Only close if clicking on the background, not the content
+    if (e.target === lightbox) {
+      lightbox.style.display = 'none';
+      lightboxImg.src = '';
+      document.getElementById('lightbox-source').href = '#';
+    }
   });
 
   lightbox.addEventListener('keydown', e => {
     if(e.key === "Escape"){
       lightbox.style.display = 'none';
       lightboxImg.src = '';
+      document.getElementById('lightbox-source').href = '#';
     }
   });
 

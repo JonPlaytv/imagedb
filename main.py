@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import numpy as np
 import clip
@@ -26,16 +27,19 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
 processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base", use_fast=True)
 caption_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
-
 nlp = spacy.load("en_core_web_sm")
 
-if os.path.exists(EMBEDDINGS_FILE):
+image_ext_pattern = re.compile(r"\.(jpg|jpeg|png|webp|bmp|gif)(?:\?.*)?$", re.IGNORECASE)
+
+if os.path.exists(EMBEDDINGS_FILE) and os.path.exists(METADATA_FILE):
     clip_vectors = np.load(EMBEDDINGS_FILE)
     with open(METADATA_FILE) as f:
         metadata = json.load(f)
 else:
     clip_vectors = np.zeros((0, 512), dtype=np.float32)
     metadata = []
+
+print(f"[INIT] Loaded {len(metadata)} metadata items with {clip_vectors.shape[0]} vectors.")
 
 def generate_caption(image: Image.Image) -> str:
     inputs = processor(image, return_tensors="pt").to(device)
@@ -45,6 +49,12 @@ def generate_caption(image: Image.Image) -> str:
 def extract_keywords(caption: str):
     doc = nlp(caption.lower())
     return list(set(token.lemma_ for token in doc if token.is_alpha and not token.is_stop))
+
+def jaccard_similarity(tags1, tags2):
+    set1, set2 = set(tags1), set(tags2)
+    if not set1 or not set2:
+        return 0.0
+    return len(set1 & set2) / len(set1 | set2)
 
 def process_query_image(image):
     query_hash = imagehash.phash(image)
@@ -59,28 +69,59 @@ def process_query_text(text):
         text_embedding = model.encode_text(text_input).cpu().numpy()
     return text_embedding
 
-def get_images_from_website(base_url):
+def crawl_images(base_url, depth=1, max_pages=5, visited=None):
+    if visited is None:
+        visited = set()
+    if base_url in visited or len(visited) >= max_pages:
+        return []
+
+    visited.add(base_url)
+    print(f"[CRAWL] {base_url}")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
     try:
-        resp = requests.get(base_url, timeout=10)
+        resp = requests.get(base_url, headers=headers, timeout=10)
+        resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Sammle Bilder auf dieser Seite
         img_urls = set()
         for img in soup.find_all("img"):
             src = img.get("src")
             if src:
-                full = urljoin(base_url, src)
-                if full.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif")):
-                    img_urls.add(full)
+                full_url = urljoin(base_url, src)
+                if image_ext_pattern.search(full_url):
+                    img_urls.add(full_url)
+
+        # Wenn Tiefe erlaubt, folge Links
+        if depth > 0:
+            for link in soup.find_all("a", href=True):
+                href = link['href']
+                next_url = urljoin(base_url, href)
+                if base_url in next_url and next_url not in visited:
+                    img_urls.update(crawl_images(next_url, depth=depth - 1, max_pages=max_pages, visited=visited))
+
         return list(img_urls)
+
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print(f"[ERROR] crawl {base_url}: {e}")
         return []
 
 def download_and_embed(url):
     try:
         r = requests.get(url, timeout=10)
-        img = Image.open(BytesIO(r.content)).convert("RGB")
-        img = img.resize((512, 512))
-        filename = f"web_{len(metadata)}.webp"
+        r.raise_for_status()
+        img = Image.open(BytesIO(r.content)).convert("RGB").resize((512, 512))
+        phash = str(imagehash.phash(img))
+
+        # Skip if hash already exists
+        if any(m.get("hash") == phash for m in metadata):
+            print(f"[SKIP] Duplicate image (hash: {phash}) from {url}")
+            return None, None
+
+        filename = f"{phash}.webp"
         path = os.path.join(IMAGE_FOLDER, filename)
         img.save(path, "WEBP", quality=85)
 
@@ -90,20 +131,20 @@ def download_and_embed(url):
 
         caption = generate_caption(img)
         tags = extract_keywords(caption)
-        phash = str(imagehash.phash(img))
 
-        metadata.append({
-            "path": f"{IMAGE_FOLDER}/{filename}",
+        meta = {
+            "path": f"{IMAGE_FOLDER}/{filename}".replace("\\", "/"),
             "caption": caption,
             "tags": tags,
             "hash": phash,
             "source": url
-        })
+        }
 
+        metadata.append(meta)
         global clip_vectors
         clip_vectors = np.vstack([clip_vectors, embedding[None]])
+        return meta, embedding
 
-        return metadata[-1], embedding
     except Exception as e:
         print(f"[SKIP] {url}: {e}")
         return None, None
@@ -120,53 +161,80 @@ def index():
         text = request.form.get("text_query", "").strip()
         site_url = request.form.get("site_query", "").strip()
 
-        if file:
+        if file and file.filename != "":
             query_type = "image"
-            query_img = Image.open(file.stream).convert("RGB")
-            generated_caption = generate_caption(query_img)
-            generated_tags = extract_keywords(generated_caption)
-            query_hash, query_embed = process_query_image(query_img)
+            try:
+                query_img = Image.open(file.stream).convert("RGB")
+            except Exception as e:
+                print(f"[ERROR] Failed to open uploaded image: {e}")
+                query_img = None
 
-            filtered_indices = [
-                i for i, meta in enumerate(metadata)
-                if (query_hash - imagehash.hex_to_hash(meta["hash"])) < 16
-            ] or list(range(len(metadata)))
+            if query_img:
+                generated_caption = generate_caption(query_img)
+                generated_tags = extract_keywords(generated_caption)
+                query_hash, query_embed = process_query_image(query_img)
 
-            search_vectors = clip_vectors[filtered_indices]
-            sims = cosine_similarity(query_embed, search_vectors)[0]
-            top_indices = np.argsort(sims)[-25:][::-1]
+                filtered_indices = [
+                    i for i, meta in enumerate(metadata)
+                    if "hash" in meta and (query_hash - imagehash.hex_to_hash(meta["hash"])) < 16
+                ]
 
-            for idx in top_indices:
-                real_idx = filtered_indices[idx]
-                meta = metadata[real_idx]
-                matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", [])))
+                if not filtered_indices:
+                    filtered_indices = list(range(len(metadata)))
+
+                if filtered_indices:
+                    search_vectors = clip_vectors[filtered_indices]
+                    if search_vectors.size > 0:
+                        sims = cosine_similarity(query_embed, search_vectors)[0]
+
+                        scored_results = []
+                        for i, sim in enumerate(sims):
+                            real_idx = filtered_indices[i]
+                            meta = metadata[real_idx]
+                            tag_score = jaccard_similarity(generated_tags, meta.get("tags", []))
+                            combined_score = 0.7 * sim + 0.3 * tag_score
+                            scored_results.append((combined_score, meta, sim, tag_score))
+
+                        scored_results.sort(key=lambda x: x[0], reverse=True)
+
+                        for score, meta, clip_score, tag_score in scored_results[:25]:
+                            # HIER die Quelle als 6. Parameter anhängen
+                            matches.append((meta["path"], 0, score, meta.get("caption", ""), meta.get("tags", []), meta.get("source", "")))
+                    else:
+                        print("[WARN] Empty search vector array.")
+                else:
+                    print("[WARN] No valid indices for search.")
 
         elif text:
             query_type = "text"
-            query_embed = process_query_text(text)
-            sims = cosine_similarity(query_embed, clip_vectors)[0]
-            top_indices = np.argsort(sims)[-100:][::-1]
+            if clip_vectors.shape[0] == 0:
+                print("[WARN] clip_vectors empty, skipping text search.")
+            else:
+                query_embed = process_query_text(text)
+                sims = cosine_similarity(query_embed, clip_vectors)[0]
+                top_indices = np.argsort(sims)[-100:][::-1]
 
-            text_lower = text.lower()
-            for idx in top_indices:
-                meta = metadata[idx]
-                if (text_lower in meta.get("caption", "").lower()) or any(text_lower in t for t in meta.get("tags", [])):
-                    matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", [])))
-                    if len(matches) >= 25:
-                        break
+                text_lower = text.lower()
+                for idx in top_indices:
+                    meta = metadata[idx]
+                    if (text_lower in meta.get("caption", "").lower()) or any(text_lower in t for t in meta.get("tags", [])):
+                        matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", []), meta.get("source", "")))
+                        if len(matches) >= 25:
+                            break
 
         elif site_url:
             query_type = "url"
-            img_urls = get_images_from_website(site_url)
-            for url in img_urls[:15]:  # limit for speed
-                meta, _ = download_and_embed(url)
-                if meta:
-                    matches.append((meta["path"], 0, 1.0, meta["caption"], meta["tags"]))
-
-            # Save updated DB
-            np.save(EMBEDDINGS_FILE, clip_vectors)
-            with open(METADATA_FILE, "w") as f:
-                json.dump(metadata, f, indent=2)
+            try:
+                img_urls = crawl_images(site_url)
+                for url in img_urls[:15]:
+                    meta, _ = download_and_embed(url)
+                    if meta:
+                        matches.append((meta["path"], 0, 1.0, meta["caption"], meta["tags"], meta.get("source", "")))
+                np.save(EMBEDDINGS_FILE, clip_vectors)
+                with open(METADATA_FILE, "w") as f:
+                    json.dump(metadata, f, indent=2)
+            except Exception as e:
+                print(f"[ERROR] Processing site URL {site_url}: {e}")
 
     return render_template(
         "index.html",

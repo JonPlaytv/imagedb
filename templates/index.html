@@ -21,6 +21,12 @@
       align-items: center;
       padding: 2rem;
       color: #f0f0f0;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    body.dark-mode {
+      background: #121212;
+      color: #eee;
     }
 
     h1 {
@@ -128,6 +134,99 @@
       background: #222;
     }
 
+    /* Settings icon button fixed top right */
+    #settings-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 36px;
+      height: 36px;
+      background: rgba(255 255 255 / 0.15);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 10px rgba(255 255 255 / 0.1);
+      transition: background-color 0.3s ease;
+      z-index: 10000;
+      color: #ddd;
+    }
+    #settings-btn:hover {
+      background: rgba(255 255 255 / 0.35);
+      color: #fff;
+    }
+
+    /* Settings panel popup */
+    #settings-panel {
+      position: fixed;
+      top: 60px;
+      right: 20px;
+      width: 320px;
+      max-width: 90vw;
+      background: rgba(255 255 255 / 0.1);
+      border: 1.5px solid rgba(255 255 255 / 0.3);
+      border-radius: 12px;
+      padding: 1.2rem 1.5rem;
+      color: #ddd;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      backdrop-filter: blur(12px);
+      user-select: none;
+      display: none;
+      z-index: 9999;
+      transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+    }
+    body.dark-mode #settings-panel {
+      background: rgba(40 40 40 / 0.9);
+      border-color: #555;
+      color: #eee;
+    }
+
+    #settings-panel.open {
+      display: block;
+    }
+
+    #settings-panel label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #site-input {
+      width: 100%;
+      padding: 0.5rem 1rem;
+      border-radius: 30px;
+      border: none;
+      outline: none;
+      font-size: 1rem;
+      background: rgba(255 255 255 / 0.15);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(255 255 255 / 0.1);
+      transition: background-color 0.3s ease;
+      margin-top: 1rem;
+    }
+    #site-input::placeholder {
+      color: #ddd;
+    }
+    #site-input:hover,
+    #site-input:focus {
+      background: rgba(255 255 255 / 0.3);
+    }
+    body.dark-mode #site-input {
+      background: rgba(255 255 255 / 0.1);
+      color: #eee;
+      box-shadow: 0 0 8px rgba(255 255 255 / 0.05);
+    }
+    body.dark-mode #site-input:hover,
+    body.dark-mode #site-input:focus {
+      background: rgba(255 255 255 / 0.2);
+    }
+
     /* Results grid */
     #results {
       display: grid;
@@ -147,6 +246,10 @@
       cursor: pointer;
       display: flex;
       flex-direction: column;
+    }
+    body.dark-mode .card {
+      background: rgba(30 30 30 / 0.7);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.8);
     }
 
     .card:hover {
@@ -172,6 +275,9 @@
       color: #eee;
       font-size: 1rem;
       min-height: 3em;
+    }
+    body.dark-mode .caption {
+      color: #ddd;
     }
 
     .tags {
@@ -215,7 +321,6 @@
       border-radius: 15px;
       box-shadow: 0 0 30px #667eea;
       animation: fadeIn 0.3s ease;
-      /* Make sure image fits and is big enough */
       width: auto;
       height: auto;
     }
@@ -231,6 +336,11 @@
       }
       .card img {
         height: 120px;
+      }
+      #settings-panel {
+        width: 90vw;
+        right: 5vw;
+        top: 60px;
       }
     }
   </style>
@@ -252,13 +362,50 @@
       <path d="M21 21l-6-6m2-5a7 7 0 1 0-14 0 7 7 0 0 0 14 0z" stroke="#ddd" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <input type="file" id="fileElem" name="query" accept="image/*" style="display:none" />
-    
+    <input
+      type="text"
+      id="site-input"
+      name="site_query"
+      placeholder="Scrape a website URL (e.g. https://example.com)"
+      autocomplete="off"
+      spellcheck="false"
+      style="display:none" 
+    />
   </form>
 
-  <label id="drop-area" for="fileElem">
+  <label id="drop-area" for="fileElem" tabindex="0" role="button" aria-label="Drag and drop image or click to browse">
     <p>Drag & Drop an image here or click to browse</p>
     <img id="preview-thumb" alt="Preview Thumbnail" />
   </label>
+
+  <!-- Settings button -->
+  <button id="settings-btn" aria-label="Open settings" title="Settings">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
+      viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </button>
+
+  <!-- Settings panel -->
+  <div id="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1">
+    <h2 id="settings-title" style="margin-bottom:1rem; font-weight:600; font-size:1.25rem; color:#667eea;">Settings</h2>
+    
+    <label for="darkmode-toggle">
+      <input type="checkbox" id="darkmode-toggle" />
+      Dark Mode
+    </label>
+
+    <input
+      type="text"
+      id="site-input-settings"
+      name="site_query"
+      placeholder="Scrape a website URL (e.g. https://example.com)"
+      autocomplete="off"
+      spellcheck="false"
+      style="margin-top:1.5rem;"
+    />
+  </div>
 
   <div id="results">
     {% for path, hdiff, sim, caption, tags in matches %}
@@ -288,6 +435,10 @@
   const searchForm = document.getElementById('search-form');
   const searchInput = document.getElementById('search-input');
   const searchIcon = document.getElementById('search-icon');
+  const settingsBtn = document.getElementById('settings-btn');
+  const settingsPanel = document.getElementById('settings-panel');
+  const darkmodeToggle = document.getElementById('darkmode-toggle');
+  const siteInputSettings = document.getElementById('site-input-settings');
 
   // Show preview thumbnail when image selected
   function showPreview(file) {
@@ -308,6 +459,9 @@
   fileInput.addEventListener('change', () => {
     if(fileInput.files.length){
       showPreview(fileInput.files[0]);
+      // Clear other inputs
+      searchInput.value = '';
+      siteInputSettings.value = '';
       submitForm();
     }
   });
@@ -332,66 +486,86 @@
     if(e.dataTransfer.files.length){
       fileInput.files = e.dataTransfer.files;
       showPreview(e.dataTransfer.files[0]);
+      // Clear other inputs
+      searchInput.value = '';
+      siteInputSettings.value = '';
       submitForm();
     }
   });
 
+  // Submit form function
   function submitForm(){
-  const formData = new FormData();
+    const formData = new FormData();
 
-  if(fileInput.files.length){
-    formData.append('query', fileInput.files[0]);
-  } else if (searchInput.value.trim()) {
-    formData.append('text_query', searchInput.value.trim());
-  } else {
-    // Nothing to search
-    return;
+    if(fileInput.files.length){
+      formData.append('query', fileInput.files[0]);
+    } else if (searchInput.value.trim()) {
+      formData.append('text_query', searchInput.value.trim());
+    } else if (siteInputSettings.value.trim()) {
+      formData.append('site_query', siteInputSettings.value.trim());
+    } else {
+      // Nothing to search
+      return;
+    }
+
+    fetch('/', {
+      method: 'POST',
+      body: formData
+    }).then(res => res.text())
+      .then(html => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newResults = doc.getElementById('results');
+        resultsDiv.innerHTML = newResults.innerHTML;
+        attachCardClickEvents();
+        attachTagClickEvents();
+      }).catch(err => {
+        alert('Search error');
+        console.error(err);
+      });
   }
 
-  fetch('/', {
-    method: 'POST',
-    body: formData
-  }).then(res => res.text())
-    .then(html => {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const newResults = doc.getElementById('results');
-      resultsDiv.innerHTML = newResults.innerHTML;
-      attachCardClickEvents();
-      attachTagClickEvents();
-    }).catch(err => {
-      alert('Search error');
-      console.error(err);
-    });
-}
+  // Search on enter in text field
+  searchInput.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      // Clear file and site input to prefer text search
+      fileInput.value = '';
+      siteInputSettings.value = '';
+      previewThumb.style.display = 'none';
+      submitForm();
+    }
+  });
 
-// Search on enter in text field
-searchInput.addEventListener('keydown', e => {
-  if(e.key === 'Enter'){
-    e.preventDefault();
-    // Clear file input to prefer text search
-    fileInput.value = '';
-    previewThumb.style.display = 'none';
-    submitForm();
-  }
-});
+  // Enter on site input triggers scrape
+  siteInputSettings.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      // Clear file and text input to prefer site scraping
+      fileInput.value = '';
+      searchInput.value = '';
+      previewThumb.style.display = 'none';
+      submitForm();
+    }
+  });
 
-// Search icon click triggers text search
-searchIcon.addEventListener('click', () => {
-  if(searchInput.value.trim()){
-    fileInput.value = '';
-    previewThumb.style.display = 'none';
-    submitForm();
-    searchInput.focus();
-  }
-});
-
+  // Search icon click triggers text search
+  searchIcon.addEventListener('click', () => {
+    if(searchInput.value.trim()){
+      fileInput.value = '';
+      siteInputSettings.value = '';
+      previewThumb.style.display = 'none';
+      submitForm();
+      searchInput.focus();
+    }
+  });
 
   // Tag search
   function searchByTag(tag) {
     // Clear file input and text input
     fileInput.value = '';
     searchInput.value = tag;
+    siteInputSettings.value = '';
     previewThumb.style.display = 'none';
 
     const formData = new FormData();
@@ -447,14 +621,36 @@ searchIcon.addEventListener('click', () => {
     }
   });
 
-  // Click search icon triggers search if input not empty
-  searchIcon.addEventListener('click', () => {
-    if(searchInput.value.trim()){
-      fileInput.value = '';
-      previewThumb.style.display = 'none';
-      submitForm();
-      searchInput.focus();
+  // Settings panel toggle
+  settingsBtn.addEventListener('click', () => {
+    if(settingsPanel.classList.contains('open')){
+      settingsPanel.classList.remove('open');
+    } else {
+      settingsPanel.classList.add('open');
+      settingsPanel.focus();
     }
+  });
+
+  // Close settings panel on Escape
+  settingsPanel.addEventListener('keydown', e => {
+    if(e.key === "Escape"){
+      settingsPanel.classList.remove('open');
+      settingsBtn.focus();
+    }
+  });
+
+  // Dark mode toggle
+  darkmodeToggle.addEventListener('change', () => {
+    if(darkmodeToggle.checked){
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+  });
+
+  // Initialize darkmode toggle state from body class
+  window.addEventListener('DOMContentLoaded', () => {
+    darkmodeToggle.checked = document.body.classList.contains('dark-mode');
   });
 
   // Initial attach

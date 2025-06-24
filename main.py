@@ -50,6 +50,12 @@ def extract_keywords(caption: str):
     doc = nlp(caption.lower())
     return list(set(token.lemma_ for token in doc if token.is_alpha and not token.is_stop))
 
+def jaccard_similarity(tags1, tags2):
+    set1, set2 = set(tags1), set(tags2)
+    if not set1 or not set2:
+        return 0.0
+    return len(set1 & set2) / len(set1 | set2)
+
 def process_query_image(image):
     query_hash = imagehash.phash(image)
     image_input = preprocess(image).unsqueeze(0).to(device)
@@ -63,8 +69,15 @@ def process_query_text(text):
         text_embedding = model.encode_text(text_input).cpu().numpy()
     return text_embedding
 
-def get_images_from_website(base_url):
-    print(f"[INFO] Scraping URL: {base_url}")
+def crawl_images(base_url, depth=1, max_pages=5, visited=None):
+    if visited is None:
+        visited = set()
+    if base_url in visited or len(visited) >= max_pages:
+        return []
+
+    visited.add(base_url)
+    print(f"[CRAWL] {base_url}")
+
     headers = {
         "User-Agent": "Mozilla/5.0"
     }
@@ -72,6 +85,8 @@ def get_images_from_website(base_url):
         resp = requests.get(base_url, headers=headers, timeout=10)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Sammle Bilder auf dieser Seite
         img_urls = set()
         for img in soup.find_all("img"):
             src = img.get("src")
@@ -79,18 +94,35 @@ def get_images_from_website(base_url):
                 full_url = urljoin(base_url, src)
                 if image_ext_pattern.search(full_url):
                     img_urls.add(full_url)
-        print(f"[INFO] Found {len(img_urls)} images")
+
+        # Wenn Tiefe erlaubt, folge Links
+        if depth > 0:
+            for link in soup.find_all("a", href=True):
+                href = link['href']
+                next_url = urljoin(base_url, href)
+                if base_url in next_url and next_url not in visited:
+                    img_urls.update(crawl_images(next_url, depth=depth - 1, max_pages=max_pages, visited=visited))
+
         return list(img_urls)
+
     except Exception as e:
-        print(f"[ERROR] Failed to scrape {base_url}: {e}")
+        print(f"[ERROR] crawl {base_url}: {e}")
         return []
+
 
 def download_and_embed(url):
     try:
         r = requests.get(url, timeout=10)
         r.raise_for_status()
         img = Image.open(BytesIO(r.content)).convert("RGB").resize((512, 512))
-        filename = f"web_{len(metadata)}.webp"
+        phash = str(imagehash.phash(img))
+
+        # Skip if hash already exists
+        if any(m.get("hash") == phash for m in metadata):
+            print(f"[SKIP] Duplicate image (hash: {phash}) from {url}")
+            return None, None
+
+        filename = f"{phash}.webp"
         path = os.path.join(IMAGE_FOLDER, filename)
         img.save(path, "WEBP", quality=85)
 
@@ -100,7 +132,6 @@ def download_and_embed(url):
 
         caption = generate_caption(img)
         tags = extract_keywords(caption)
-        phash = str(imagehash.phash(img))
 
         meta = {
             "path": f"{IMAGE_FOLDER}/{filename}".replace("\\", "/"),
@@ -118,6 +149,7 @@ def download_and_embed(url):
     except Exception as e:
         print(f"[SKIP] {url}: {e}")
         return None, None
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -156,12 +188,19 @@ def index():
                     search_vectors = clip_vectors[filtered_indices]
                     if search_vectors.size > 0:
                         sims = cosine_similarity(query_embed, search_vectors)[0]
-                        top_indices = np.argsort(sims)[-25:][::-1]
 
-                        for idx in top_indices:
-                            real_idx = filtered_indices[idx]
+                        scored_results = []
+                        for i, sim in enumerate(sims):
+                            real_idx = filtered_indices[i]
                             meta = metadata[real_idx]
-                            matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", [])))
+                            tag_score = jaccard_similarity(generated_tags, meta.get("tags", []))
+                            combined_score = 0.7 * sim + 0.3 * tag_score
+                            scored_results.append((combined_score, meta, sim, tag_score))
+
+                        scored_results.sort(key=lambda x: x[0], reverse=True)
+
+                        for score, meta, clip_score, tag_score in scored_results[:25]:
+                            matches.append((meta["path"], 0, score, meta.get("caption", ""), meta.get("tags", [])))
                     else:
                         print("[WARN] Empty search vector array.")
                 else:
@@ -187,12 +226,11 @@ def index():
         elif site_url:
             query_type = "url"
             try:
-                img_urls = get_images_from_website(site_url)
-                for url in img_urls[:15]:  # Limit for performance
+                img_urls = crawl_images(site_url)
+                for url in img_urls[:15]:
                     meta, _ = download_and_embed(url)
                     if meta:
                         matches.append((meta["path"], 0, 1.0, meta["caption"], meta["tags"]))
-                # Save updated DB
                 np.save(EMBEDDINGS_FILE, clip_vectors)
                 with open(METADATA_FILE, "w") as f:
                     json.dump(metadata, f, indent=2)

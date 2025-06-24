@@ -69,7 +69,7 @@ def process_query_text(text):
         text_embedding = model.encode_text(text_input).cpu().numpy()
     return text_embedding
 
-def crawl_images(base_url, depth=1, max_pages=5, visited=None):
+def crawl_images(base_url, depth=2, max_pages=10, visited=None):
     if visited is None:
         visited = set()
     if base_url in visited or len(visited) >= max_pages:
@@ -81,33 +81,38 @@ def crawl_images(base_url, depth=1, max_pages=5, visited=None):
     headers = {
         "User-Agent": "Mozilla/5.0"
     }
+
+    img_urls = set()
     try:
         resp = requests.get(base_url, headers=headers, timeout=10)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Sammle Bilder auf dieser Seite
-        img_urls = set()
+        # Collect image URLs
         for img in soup.find_all("img"):
-            src = img.get("src")
+            src = img.get("src") or img.get("data-src")
             if src:
                 full_url = urljoin(base_url, src)
                 if image_ext_pattern.search(full_url):
                     img_urls.add(full_url)
 
-        # Wenn Tiefe erlaubt, folge Links
-        if depth > 0:
-            for link in soup.find_all("a", href=True):
-                href = link['href']
-                next_url = urljoin(base_url, href)
-                if base_url in next_url and next_url not in visited:
-                    img_urls.update(crawl_images(next_url, depth=depth - 1, max_pages=max_pages, visited=visited))
+        # Follow more links, including those in nav, footer, main, and aside
+        link_tags = soup.select("a[href], nav a, footer a, main a, aside a")
+        links = set(urljoin(base_url, a['href']) for a in link_tags if a.get('href'))
+
+        # Filter and crawl deeper
+        for link in links:
+            if link not in visited and base_url.split("//")[1].split("/")[0] in link:
+                img_urls.update(crawl_images(link, depth=depth - 1, max_pages=max_pages, visited=visited))
+                if len(visited) >= max_pages:
+                    break
 
         return list(img_urls)
 
     except Exception as e:
         print(f"[ERROR] crawl {base_url}: {e}")
-        return []
+        return list(img_urls)
+
 
 def download_and_embed(url):
     try:

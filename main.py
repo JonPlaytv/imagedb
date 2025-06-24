@@ -109,7 +109,6 @@ def crawl_images(base_url, depth=1, max_pages=5, visited=None):
         print(f"[ERROR] crawl {base_url}: {e}")
         return []
 
-
 def download_and_embed(url):
     try:
         r = requests.get(url, timeout=10)
@@ -149,7 +148,6 @@ def download_and_embed(url):
     except Exception as e:
         print(f"[SKIP] {url}: {e}")
         return None, None
-
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -200,7 +198,8 @@ def index():
                         scored_results.sort(key=lambda x: x[0], reverse=True)
 
                         for score, meta, clip_score, tag_score in scored_results[:25]:
-                            matches.append((meta["path"], 0, score, meta.get("caption", ""), meta.get("tags", [])))
+                            # HIER die Quelle als 6. Parameter anhängen
+                            matches.append((meta["path"], 0, score, meta.get("caption", ""), meta.get("tags", []), meta.get("source", "")))
                     else:
                         print("[WARN] Empty search vector array.")
                 else:
@@ -219,7 +218,7 @@ def index():
                 for idx in top_indices:
                     meta = metadata[idx]
                     if (text_lower in meta.get("caption", "").lower()) or any(text_lower in t for t in meta.get("tags", [])):
-                        matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", [])))
+                        matches.append((meta["path"], 0, sims[idx], meta.get("caption", ""), meta.get("tags", []), meta.get("source", "")))
                         if len(matches) >= 25:
                             break
 
@@ -230,7 +229,7 @@ def index():
                 for url in img_urls[:15]:
                     meta, _ = download_and_embed(url)
                     if meta:
-                        matches.append((meta["path"], 0, 1.0, meta["caption"], meta["tags"]))
+                        matches.append((meta["path"], 0, 1.0, meta["caption"], meta["tags"], meta.get("source", "")))
                 np.save(EMBEDDINGS_FILE, clip_vectors)
                 with open(METADATA_FILE, "w") as f:
                     json.dump(metadata, f, indent=2)

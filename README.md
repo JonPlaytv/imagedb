@@ -2,7 +2,7 @@
 
 Ein GPU-beschleunigtes Tool zur visuellen Bildersuche, automatischen Caption-Erstellung, Tagging und Website-Bild-Scraping – alles in einer Weboberfläche.
 
-![screenshot](https://github.com/user-attachments/assets/c97343dd-9181-4a6e-9220-6a0d826dc48f) 
+![Screenshot 2025-06-24 230457](https://github.com/user-attachments/assets/98259556-ac3b-4b34-8555-63892fa28525)
 
 ## ✨ Features
 
@@ -16,7 +16,7 @@ Ein GPU-beschleunigtes Tool zur visuellen Bildersuche, automatischen Caption-Ers
 - Schlagwortsuche per Klick auf Tags
 - Responsive Web UI mit Lightbox, Vorschau & Galerie
 
-![Screenshot 2025-06-24 162116](https://github.com/user-attachments/assets/09b58445-c517-4c6e-a758-706219009fa7)
+![Screenshot 2025-06-24 230302](https://github.com/user-attachments/assets/6a156140-503e-4441-9250-87641023a379)
 
 ## 🚀 Schnellstart
 

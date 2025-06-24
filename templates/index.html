@@ -128,6 +128,63 @@
       background: #222;
     }
 
+    /* Settings panel */
+    details#settings {
+      width: 350px;
+      max-width: 90vw;
+      margin-bottom: 2rem;
+      border: 1.5px solid rgba(255 255 255 / 0.3);
+      border-radius: 10px;
+      padding: 1rem 1.5rem;
+      background: rgba(255 255 255 / 0.1);
+      color: #ddd;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.3s ease, border-color 0.3s ease;
+    }
+    details#settings[open] {
+      background: rgba(255 255 255 / 0.25);
+      border-color: #fff;
+      color: #fff;
+    }
+    details#settings summary {
+      font-weight: 600;
+      font-size: 1.1rem;
+      outline: none;
+      cursor: pointer;
+      list-style: none;
+    }
+    details#settings summary::-webkit-details-marker {
+      display: none;
+    }
+    details#settings summary::before {
+      content: "⚙ ";
+      font-size: 1.2rem;
+      color: #667eea;
+      margin-right: 0.3rem;
+    }
+
+    #site-input {
+      width: 100%;
+      padding: 0.5rem 1rem;
+      border-radius: 30px;
+      border: none;
+      outline: none;
+      font-size: 1rem;
+      background: rgba(255 255 255 / 0.15);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(255 255 255 / 0.1);
+      transition: background-color 0.3s ease;
+      margin-top: 1rem;
+    }
+    #site-input::placeholder {
+      color: #ddd;
+    }
+    #site-input:hover,
+    #site-input:focus {
+      background: rgba(255 255 255 / 0.3);
+    }
+
     /* Results grid */
     #results {
       display: grid;
@@ -215,7 +272,6 @@
       border-radius: 15px;
       box-shadow: 0 0 30px #667eea;
       animation: fadeIn 0.3s ease;
-      /* Make sure image fits and is big enough */
       width: auto;
       height: auto;
     }
@@ -231,6 +287,9 @@
       }
       .card img {
         height: 120px;
+      }
+      details#settings {
+        width: 100%;
       }
     }
   </style>
@@ -252,13 +311,26 @@
       <path d="M21 21l-6-6m2-5a7 7 0 1 0-14 0 7 7 0 0 0 14 0z" stroke="#ddd" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <input type="file" id="fileElem" name="query" accept="image/*" style="display:none" />
-    
   </form>
 
   <label id="drop-area" for="fileElem">
     <p>Drag & Drop an image here or click to browse</p>
     <img id="preview-thumb" alt="Preview Thumbnail" />
   </label>
+
+  <!-- Settings Panel -->
+  <details id="settings">
+    <summary>Settings</summary>
+    <input
+      type="text"
+      id="site-input"
+      name="site_query"
+      placeholder="Scrape a website URL (e.g. https://example.com)"
+      autocomplete="off"
+      spellcheck="false"
+      form="search-form"
+    />
+  </details>
 
   <div id="results">
     {% for path, hdiff, sim, caption, tags in matches %}
@@ -288,6 +360,7 @@
   const searchForm = document.getElementById('search-form');
   const searchInput = document.getElementById('search-input');
   const searchIcon = document.getElementById('search-icon');
+  const siteInput = document.getElementById('site-input');
 
   // Show preview thumbnail when image selected
   function showPreview(file) {
@@ -308,6 +381,9 @@
   fileInput.addEventListener('change', () => {
     if(fileInput.files.length){
       showPreview(fileInput.files[0]);
+      // Clear other inputs
+      searchInput.value = '';
+      siteInput.value = '';
       submitForm();
     }
   });
@@ -332,66 +408,86 @@
     if(e.dataTransfer.files.length){
       fileInput.files = e.dataTransfer.files;
       showPreview(e.dataTransfer.files[0]);
+      // Clear other inputs
+      searchInput.value = '';
+      siteInput.value = '';
       submitForm();
     }
   });
 
+  // Submit form function
   function submitForm(){
-  const formData = new FormData();
+    const formData = new FormData();
 
-  if(fileInput.files.length){
-    formData.append('query', fileInput.files[0]);
-  } else if (searchInput.value.trim()) {
-    formData.append('text_query', searchInput.value.trim());
-  } else {
-    // Nothing to search
-    return;
+    if(fileInput.files.length){
+      formData.append('query', fileInput.files[0]);
+    } else if (searchInput.value.trim()) {
+      formData.append('text_query', searchInput.value.trim());
+    } else if (siteInput.value.trim()) {
+      formData.append('site_query', siteInput.value.trim());
+    } else {
+      // Nothing to search
+      return;
+    }
+
+    fetch('/', {
+      method: 'POST',
+      body: formData
+    }).then(res => res.text())
+      .then(html => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newResults = doc.getElementById('results');
+        resultsDiv.innerHTML = newResults.innerHTML;
+        attachCardClickEvents();
+        attachTagClickEvents();
+      }).catch(err => {
+        alert('Search error');
+        console.error(err);
+      });
   }
 
-  fetch('/', {
-    method: 'POST',
-    body: formData
-  }).then(res => res.text())
-    .then(html => {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const newResults = doc.getElementById('results');
-      resultsDiv.innerHTML = newResults.innerHTML;
-      attachCardClickEvents();
-      attachTagClickEvents();
-    }).catch(err => {
-      alert('Search error');
-      console.error(err);
-    });
-}
+  // Search on enter in text field
+  searchInput.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      // Clear file and site input to prefer text search
+      fileInput.value = '';
+      siteInput.value = '';
+      previewThumb.style.display = 'none';
+      submitForm();
+    }
+  });
 
-// Search on enter in text field
-searchInput.addEventListener('keydown', e => {
-  if(e.key === 'Enter'){
-    e.preventDefault();
-    // Clear file input to prefer text search
-    fileInput.value = '';
-    previewThumb.style.display = 'none';
-    submitForm();
-  }
-});
+  // Enter on site input triggers scrape
+  siteInput.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      // Clear file and text input to prefer site scraping
+      fileInput.value = '';
+      searchInput.value = '';
+      previewThumb.style.display = 'none';
+      submitForm();
+    }
+  });
 
-// Search icon click triggers text search
-searchIcon.addEventListener('click', () => {
-  if(searchInput.value.trim()){
-    fileInput.value = '';
-    previewThumb.style.display = 'none';
-    submitForm();
-    searchInput.focus();
-  }
-});
-
+  // Search icon click triggers text search
+  searchIcon.addEventListener('click', () => {
+    if(searchInput.value.trim()){
+      fileInput.value = '';
+      siteInput.value = '';
+      previewThumb.style.display = 'none';
+      submitForm();
+      searchInput.focus();
+    }
+  });
 
   // Tag search
   function searchByTag(tag) {
     // Clear file input and text input
     fileInput.value = '';
     searchInput.value = tag;
+    siteInput.value = '';
     previewThumb.style.display = 'none';
 
     const formData = new FormData();
@@ -444,16 +540,6 @@ searchIcon.addEventListener('click', () => {
     if(e.key === "Escape"){
       lightbox.style.display = 'none';
       lightboxImg.src = '';
-    }
-  });
-
-  // Click search icon triggers search if input not empty
-  searchIcon.addEventListener('click', () => {
-    if(searchInput.value.trim()){
-      fileInput.value = '';
-      previewThumb.style.display = 'none';
-      submitForm();
-      searchInput.focus();
     }
   });
 

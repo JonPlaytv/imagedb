@@ -21,7 +21,7 @@ Ein GPU-beschleunigtes Tool zur visuellen Bildersuche, automatischen Caption-Ers
 ## 🚀 Schnellstart
 
 ```bash
-git clone https://github.com/dein-username/image-search-app.git
+git clone https://github.com/JonPlaytv/imagedb.git
 cd image-search-app
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate

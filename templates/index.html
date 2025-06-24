@@ -21,6 +21,12 @@
       align-items: center;
       padding: 2rem;
       color: #f0f0f0;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    body.dark-mode {
+      background: #121212;
+      color: #eee;
     }
 
     h1 {
@@ -128,40 +134,67 @@
       background: #222;
     }
 
-    /* Settings panel */
-    details#settings {
-      width: 350px;
-      max-width: 90vw;
-      margin-bottom: 2rem;
-      border: 1.5px solid rgba(255 255 255 / 0.3);
-      border-radius: 10px;
-      padding: 1rem 1.5rem;
-      background: rgba(255 255 255 / 0.1);
-      color: #ddd;
+    /* Settings icon button fixed top right */
+    #settings-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 36px;
+      height: 36px;
+      background: rgba(255 255 255 / 0.15);
+      border: none;
+      border-radius: 50%;
       cursor: pointer;
-      user-select: none;
-      transition: background-color 0.3s ease, border-color 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 10px rgba(255 255 255 / 0.1);
+      transition: background-color 0.3s ease;
+      z-index: 10000;
+      color: #ddd;
     }
-    details#settings[open] {
-      background: rgba(255 255 255 / 0.25);
-      border-color: #fff;
+    #settings-btn:hover {
+      background: rgba(255 255 255 / 0.35);
       color: #fff;
     }
-    details#settings summary {
-      font-weight: 600;
-      font-size: 1.1rem;
-      outline: none;
-      cursor: pointer;
-      list-style: none;
-    }
-    details#settings summary::-webkit-details-marker {
+
+    /* Settings panel popup */
+    #settings-panel {
+      position: fixed;
+      top: 60px;
+      right: 20px;
+      width: 320px;
+      max-width: 90vw;
+      background: rgba(255 255 255 / 0.1);
+      border: 1.5px solid rgba(255 255 255 / 0.3);
+      border-radius: 12px;
+      padding: 1.2rem 1.5rem;
+      color: #ddd;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      backdrop-filter: blur(12px);
+      user-select: none;
       display: none;
+      z-index: 9999;
+      transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
     }
-    details#settings summary::before {
-      content: "⚙ ";
-      font-size: 1.2rem;
-      color: #667eea;
-      margin-right: 0.3rem;
+    body.dark-mode #settings-panel {
+      background: rgba(40 40 40 / 0.9);
+      border-color: #555;
+      color: #eee;
+    }
+
+    #settings-panel.open {
+      display: block;
+    }
+
+    #settings-panel label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      user-select: none;
     }
 
     #site-input {
@@ -184,6 +217,15 @@
     #site-input:focus {
       background: rgba(255 255 255 / 0.3);
     }
+    body.dark-mode #site-input {
+      background: rgba(255 255 255 / 0.1);
+      color: #eee;
+      box-shadow: 0 0 8px rgba(255 255 255 / 0.05);
+    }
+    body.dark-mode #site-input:hover,
+    body.dark-mode #site-input:focus {
+      background: rgba(255 255 255 / 0.2);
+    }
 
     /* Results grid */
     #results {
@@ -204,6 +246,10 @@
       cursor: pointer;
       display: flex;
       flex-direction: column;
+    }
+    body.dark-mode .card {
+      background: rgba(30 30 30 / 0.7);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.8);
     }
 
     .card:hover {
@@ -229,6 +275,9 @@
       color: #eee;
       font-size: 1rem;
       min-height: 3em;
+    }
+    body.dark-mode .caption {
+      color: #ddd;
     }
 
     .tags {
@@ -288,8 +337,10 @@
       .card img {
         height: 120px;
       }
-      details#settings {
-        width: 100%;
+      #settings-panel {
+        width: 90vw;
+        right: 5vw;
+        top: 60px;
       }
     }
   </style>
@@ -311,16 +362,6 @@
       <path d="M21 21l-6-6m2-5a7 7 0 1 0-14 0 7 7 0 0 0 14 0z" stroke="#ddd" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <input type="file" id="fileElem" name="query" accept="image/*" style="display:none" />
-  </form>
-
-  <label id="drop-area" for="fileElem">
-    <p>Drag & Drop an image here or click to browse</p>
-    <img id="preview-thumb" alt="Preview Thumbnail" />
-  </label>
-
-  <!-- Settings Panel -->
-  <details id="settings">
-    <summary>Settings</summary>
     <input
       type="text"
       id="site-input"
@@ -328,9 +369,43 @@
       placeholder="Scrape a website URL (e.g. https://example.com)"
       autocomplete="off"
       spellcheck="false"
-      form="search-form"
+      style="display:none" 
     />
-  </details>
+  </form>
+
+  <label id="drop-area" for="fileElem" tabindex="0" role="button" aria-label="Drag and drop image or click to browse">
+    <p>Drag & Drop an image here or click to browse</p>
+    <img id="preview-thumb" alt="Preview Thumbnail" />
+  </label>
+
+  <!-- Settings button -->
+  <button id="settings-btn" aria-label="Open settings" title="Settings">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
+      viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </button>
+
+  <!-- Settings panel -->
+  <div id="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1">
+    <h2 id="settings-title" style="margin-bottom:1rem; font-weight:600; font-size:1.25rem; color:#667eea;">Settings</h2>
+    
+    <label for="darkmode-toggle">
+      <input type="checkbox" id="darkmode-toggle" />
+      Dark Mode
+    </label>
+
+    <input
+      type="text"
+      id="site-input-settings"
+      name="site_query"
+      placeholder="Scrape a website URL (e.g. https://example.com)"
+      autocomplete="off"
+      spellcheck="false"
+      style="margin-top:1.5rem;"
+    />
+  </div>
 
   <div id="results">
     {% for path, hdiff, sim, caption, tags in matches %}
@@ -360,7 +435,10 @@
   const searchForm = document.getElementById('search-form');
   const searchInput = document.getElementById('search-input');
   const searchIcon = document.getElementById('search-icon');
-  const siteInput = document.getElementById('site-input');
+  const settingsBtn = document.getElementById('settings-btn');
+  const settingsPanel = document.getElementById('settings-panel');
+  const darkmodeToggle = document.getElementById('darkmode-toggle');
+  const siteInputSettings = document.getElementById('site-input-settings');
 
   // Show preview thumbnail when image selected
   function showPreview(file) {
@@ -383,7 +461,7 @@
       showPreview(fileInput.files[0]);
       // Clear other inputs
       searchInput.value = '';
-      siteInput.value = '';
+      siteInputSettings.value = '';
       submitForm();
     }
   });
@@ -410,7 +488,7 @@
       showPreview(e.dataTransfer.files[0]);
       // Clear other inputs
       searchInput.value = '';
-      siteInput.value = '';
+      siteInputSettings.value = '';
       submitForm();
     }
   });
@@ -423,8 +501,8 @@
       formData.append('query', fileInput.files[0]);
     } else if (searchInput.value.trim()) {
       formData.append('text_query', searchInput.value.trim());
-    } else if (siteInput.value.trim()) {
-      formData.append('site_query', siteInput.value.trim());
+    } else if (siteInputSettings.value.trim()) {
+      formData.append('site_query', siteInputSettings.value.trim());
     } else {
       // Nothing to search
       return;
@@ -453,14 +531,14 @@
       e.preventDefault();
       // Clear file and site input to prefer text search
       fileInput.value = '';
-      siteInput.value = '';
+      siteInputSettings.value = '';
       previewThumb.style.display = 'none';
       submitForm();
     }
   });
 
   // Enter on site input triggers scrape
-  siteInput.addEventListener('keydown', e => {
+  siteInputSettings.addEventListener('keydown', e => {
     if(e.key === 'Enter'){
       e.preventDefault();
       // Clear file and text input to prefer site scraping
@@ -475,7 +553,7 @@
   searchIcon.addEventListener('click', () => {
     if(searchInput.value.trim()){
       fileInput.value = '';
-      siteInput.value = '';
+      siteInputSettings.value = '';
       previewThumb.style.display = 'none';
       submitForm();
       searchInput.focus();
@@ -487,7 +565,7 @@
     // Clear file input and text input
     fileInput.value = '';
     searchInput.value = tag;
-    siteInput.value = '';
+    siteInputSettings.value = '';
     previewThumb.style.display = 'none';
 
     const formData = new FormData();
@@ -541,6 +619,38 @@
       lightbox.style.display = 'none';
       lightboxImg.src = '';
     }
+  });
+
+  // Settings panel toggle
+  settingsBtn.addEventListener('click', () => {
+    if(settingsPanel.classList.contains('open')){
+      settingsPanel.classList.remove('open');
+    } else {
+      settingsPanel.classList.add('open');
+      settingsPanel.focus();
+    }
+  });
+
+  // Close settings panel on Escape
+  settingsPanel.addEventListener('keydown', e => {
+    if(e.key === "Escape"){
+      settingsPanel.classList.remove('open');
+      settingsBtn.focus();
+    }
+  });
+
+  // Dark mode toggle
+  darkmodeToggle.addEventListener('change', () => {
+    if(darkmodeToggle.checked){
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+  });
+
+  // Initialize darkmode toggle state from body class
+  window.addEventListener('DOMContentLoaded', () => {
+    darkmodeToggle.checked = document.body.classList.contains('dark-mode');
   });
 
   // Initial attach

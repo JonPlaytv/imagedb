@@ -4,20 +4,21 @@ WORKDIR /app
 
 COPY . /app
 
-# Install system packages
+# Install system dependencies needed for image processing and git
 RUN apt-get update && apt-get install -y \
-    ffmpeg libgl1 libglib2.0-0 && \
+    git \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies and download spaCy model
 RUN pip install --no-cache-dir -r requirements.txt && \
     python -m spacy download en_core_web_sm
 
-# Set environment variables
+# Expose the port for Flask
 ENV PORT=8080
-
-# Expose the port Render expects
 EXPOSE 8080
 
-# Start the Flask app
+# Start the app
 CMD ["python", "main.py"]

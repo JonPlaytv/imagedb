@@ -13,6 +13,8 @@ import pillow_avif
 import tempfile
 from flask import redirect, url_for
 from flask import jsonify
+from flask_frozen import Freezer
+
 
 from PIL import Image, ImageSequence
 from io import BytesIO
@@ -24,6 +26,9 @@ import spacy
 from urllib.parse import urljoin
 
 app = Flask(__name__)
+freezer = Freezer(app)
+
+
 IMAGE_FOLDER = "static/images"
 EMBEDDINGS_FILE = "clip_embeddings.npy"
 METADATA_FILE = "metadata.json"
@@ -340,10 +345,11 @@ def upload_files():
         return jsonify({"message": "No valid files uploaded"}), 400
 
 
+if __name__ == '__main__':
+    freezer.freeze()
 
 
 
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+#if __name__ == "__main__":
+ #   port = int(os.environ.get("PORT", 10000))
+  #  app.run(host="0.0.0.0", port=port)

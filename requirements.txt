@@ -10,3 +10,7 @@ sentence-transformers>=2.7.0
 requests>=2.31
 beautifulsoup4>=4.12
 tqdm>=4.66.0
+imagehash>=4.3.1
+annoy>=1.17.3
+# CLIP from OpenAI
+git+https://github.com/openai/CLIP.git

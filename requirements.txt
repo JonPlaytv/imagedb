@@ -12,5 +12,6 @@ beautifulsoup4>=4.12
 tqdm>=4.66.0
 imagehash>=4.3.1
 annoy>=1.17.3
+opencv-python-headless>=4.10.0
 # CLIP from OpenAI
 git+https://github.com/openai/CLIP.git

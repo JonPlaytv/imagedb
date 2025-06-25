@@ -4,7 +4,7 @@ transformers==4.24.0
 clip==0.2.0
 imagehash==4.3
 requests==2.28.1
-mimetypes==0.1.0
+
 opencv-python==4.6.0.66
 Pillow==9.3.0
 pillow-avif-plugin==2.0.1

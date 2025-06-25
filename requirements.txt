@@ -10,4 +10,5 @@ transformers
 sentencepiece
 spacy
 beautifulsoup4
+sklearn
 git+https://github.com/openai/CLIP.git

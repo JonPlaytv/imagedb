@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: image-search-app
+    env: python
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      python -m spacy download en_core_web_sm
+    startCommand: python main.py
+    envVars:
+      - key: PORT
+        value: 5000
